@@ -8,6 +8,7 @@ TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
 FOOTBALL_API_KEY = os.environ.get("FOOTBALL_API_KEY")
 
 def init_db(cursor):
+    # 1. สร้างตารางถ้ายังไม่มี
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS matches (
             id INTEGER PRIMARY KEY,
@@ -38,6 +39,17 @@ def init_db(cursor):
         )
     """)
 
+    # 2. ป้องกัน Error โดยการสั่งเพิ่มคอลัมน์ match_date และ match_time หากตารางเดิมยังไม่มี
+    try:
+        cursor.execute("ALTER TABLE matches ADD COLUMN match_date TEXT")
+    except Exception:
+        pass  # ถ้ามีคอลัมน์อยู่แล้วให้ข้ามไป
+
+    try:
+        cursor.execute("ALTER TABLE matches ADD COLUMN match_time TEXT")
+    except Exception:
+        pass  # ถ้ามีคอลัมน์อยู่แล้วให้ข้ามไป
+
 def fetch_and_save_data():
     if not (TURSO_DATABASE_URL and TURSO_AUTH_TOKEN and FOOTBALL_API_KEY):
         print("Missing required environment variables.")
@@ -49,7 +61,7 @@ def fetch_and_save_data():
 
     headers = {"X-Auth-Token": FOOTBALL_API_KEY}
 
-    # 1. ดึงข้อมูลแมตช์ (ย้อนหลัง 1 วัน ถึง ล่วงหน้า 1 วัน)
+    # ดึงข้อมูลแมตช์ (ย้อนหลัง 1 วัน ถึง ล่วงหน้า 1 วัน)
     today = datetime.utcnow().date()
     date_from = (today - timedelta(days=1)).strftime("%Y-%m-%d")
     date_to = (today + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -60,7 +72,7 @@ def fetch_and_save_data():
     if resp.status_code == 200:
         matches = resp.json().get("matches", [])
         for m in matches:
-            utc_date = m["utcDate"] # e.g., "2026-09-01T18:00:00Z"
+            utc_date = m["utcDate"] # e.g. "2026-09-01T18:00:00Z"
             m_date = utc_date.split("T")[0]
             m_time = utc_date.split("T")[1][:5]
 
@@ -84,9 +96,9 @@ def fetch_and_save_data():
                 m_date,
                 m_time
             ))
-        print(f"Updated {len(matches)} matches (range {date_from} to {date_to}).")
+        print(f"Updated {len(matches)} matches successfully.")
 
-    # 2. ดึงตารางคะแนน 5 ลีกหลัก
+    # ดึงตารางคะแนน 5 ลีกหลัก
     leagues = [
         ('PL', 'Premier League'),
         ('PD', 'La Liga'),
