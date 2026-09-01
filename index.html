@@ -3,52 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>REALSPORTS - Custom Live Score</title>
+    <title>REALSPORTS - Live Scores & Standings</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@libsql/client@0.3.5/lib/bundle.js"></script>
 </head>
-<body class="bg-slate-900 text-white min-h-screen p-4 font-sans">
+<body class="bg-slate-900 text-white min-h-screen p-4 font-sans pb-20">
     <div class="max-w-md mx-auto space-y-4">
         <!-- Header -->
         <div class="flex justify-between items-center py-2">
             <h1 class="text-2xl font-bold tracking-wider text-sky-400">REALSPORTS</h1>
             <button onclick="toggleSettings()" class="bg-slate-800 text-xs px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-700">
-                ⚙️ เลือกทีมโปรด
+                ⚙️ ตั้งค่าทีมโปรด
             </button>
         </div>
 
         <!-- Pinned Settings Panel -->
         <div id="settings-panel" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2">
-            <label class="block text-xs text-slate-400">พิมพ์ชื่อทีมโปรดที่ต้องการปักหมุดบนสุด:</label>
+            <label class="block text-xs text-slate-400">พิมพ์ชื่อทีมโปรดที่ต้องการปักหมุด:</label>
             <input type="text" id="fav-input" placeholder="เช่น Real Madrid, Arsenal..." 
                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
             <button onclick="saveFavTeam()" class="w-full bg-sky-600 text-white text-sm py-1.5 rounded-lg font-medium hover:bg-sky-500">บันทึก</button>
         </div>
 
-        <!-- Pinned Section -->
-        <div id="pinned-container" class="bg-indigo-950/60 border border-indigo-500/30 p-3 rounded-xl hidden">
-            <div class="text-xs font-bold text-amber-400 mb-2">📌 ทีมโปรดของคุณ</div>
-            <div id="pinned-matches" class="space-y-2"></div>
+        <!-- MAIN TAB 1: MATCHES VIEW -->
+        <div id="view-matches" class="space-y-4">
+            <!-- Pinned Section -->
+            <div id="pinned-container" class="bg-indigo-950/60 border border-indigo-500/30 p-3 rounded-xl hidden">
+                <div class="text-xs font-bold text-amber-400 mb-2">📌 ทีมโปรดของคุณ</div>
+                <div id="pinned-matches" class="space-y-2"></div>
+            </div>
+
+            <!-- League Filter Tabs -->
+            <div id="league-filters" class="flex gap-2 overflow-x-auto pb-1 text-xs"></div>
+
+            <!-- Matches List -->
+            <div id="matches-container" class="space-y-2"></div>
         </div>
 
-        <!-- League Filter Tabs -->
-        <div id="league-filters" class="flex gap-2 overflow-x-auto pb-1 text-xs">
-            <button onclick="filterLeague('ALL')" class="bg-sky-500 px-3 py-1.5 rounded-full font-semibold">ทั้งหมด</button>
-        </div>
+        <!-- MAIN TAB 2: STANDINGS VIEW -->
+        <div id="view-standings" class="hidden space-y-4">
+            <div class="flex gap-2 overflow-x-auto pb-1 text-xs">
+                <button onclick="loadStandings('PL')" class="bg-sky-500 px-3 py-1.5 rounded-full font-medium">Premier League</button>
+                <button onclick="loadStandings('PD')" class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full font-medium">La Liga</button>
+            </div>
 
-        <!-- Matches List -->
-        <div id="matches-container" class="space-y-2">
-            <div class="text-center py-8 text-slate-500 text-sm">กำลังโหลดข้อมูลแมตช์...</div>
+            <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-950 text-slate-400">
+                        <tr>
+                            <th class="p-2.5 text-center">#</th>
+                            <th class="p-2.5">ทีม</th>
+                            <th class="p-2.5 text-center">แข่ง</th>
+                            <th class="p-2.5 text-center">GD</th>
+                            <th class="p-2.5 text-center font-bold text-sky-400">แต้ม</th>
+                        </tr>
+                    </thead>
+                    <tbody id="standings-body" class="divide-y divide-slate-700/50">
+                        <!-- Data injected by JS -->
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
-    <script>
-        // ใส่ URL และ Token ของ Turso คุณพลลงตรงนี้เพื่อเปิดดูผ่านหน้าเว็บ
-        const TURSO_URL = "libsql://realsports-db-pponnsp.aws-ap-northeast-1.turso.io";
-        const TURSO_TOKEN = "YOUR_TURSO_AUTH_TOKEN"; // นำ Token จาก .env มาวาง
+    <!-- Bottom Navigation Bar -->
+    <div class="fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur border-t border-slate-800 p-2 flex justify-around max-w-md mx-auto">
+        <button id="nav-matches" onclick="switchTab('matches')" class="flex flex-col items-center text-sky-400 text-xs font-semibold">
+            <span class="text-lg">⚽</span> ผลบอลสด
+        </button>
+        <button id="nav-standings" onclick="switchTab('standings')" class="flex flex-col items-center text-slate-400 text-xs font-semibold">
+            <span class="text-lg">📊</span> ตารางคะแนน
+        </button>
+    </div>
 
-        let allMatches = [];
-        let currentFilter = 'ALL';
+    <script>
+        let allMatches = [
+            { id: 1, home_team: 'Real Madrid', away_team: 'Barcelona', home_score: 2, away_score: 1, status: 'IN_PLAY', league_name: 'La Liga' },
+            { id: 2, home_team: 'Arsenal', away_team: 'Chelsea', home_score: 0, away_score: 0, status: 'TIMED', league_name: 'Premier League' }
+        ];
+
+        let mockStandings = [
+            { pos: 1, team: 'Real Madrid', p: 25, gd: '+35', pts: 62 },
+            { pos: 2, team: 'Girona', p: 25, gd: '+22', pts: 56 },
+            { pos: 3, team: 'Barcelona', p: 25, gd: '+18', pts: 54 },
+            { pos: 4, team: 'Atletico Madrid', p: 25, gd: '+16', pts: 51 }
+        ];
+
+        function switchTab(tab) {
+            if (tab === 'matches') {
+                document.getElementById('view-matches').classList.remove('hidden');
+                document.getElementById('view-standings').classList.add('hidden');
+                document.getElementById('nav-matches').className = 'flex flex-col items-center text-sky-400 text-xs font-semibold';
+                document.getElementById('nav-standings').className = 'flex flex-col items-center text-slate-400 text-xs font-semibold';
+            } else {
+                document.getElementById('view-matches').classList.add('hidden');
+                document.getElementById('view-standings').classList.remove('hidden');
+                document.getElementById('nav-matches').className = 'flex flex-col items-center text-slate-400 text-xs font-semibold';
+                document.getElementById('nav-standings').className = 'flex flex-col items-center text-sky-400 text-xs font-semibold';
+                renderStandings();
+            }
+        }
 
         function toggleSettings() {
             document.getElementById('settings-panel').classList.toggle('hidden');
@@ -61,54 +114,13 @@
             renderMatches();
         }
 
-        async function loadMatches() {
-            try {
-                // หากยังไม่ได้ใส่ Token จะใช้ข้อมูลสำรองแสดงผลปุ่มเลือกก่อน
-                const favTeam = localStorage.getItem('favTeam') || 'Real Madrid';
-                document.getElementById('fav-input').value = favTeam;
-
-                // Mockup Data ตัวอย่างเพื่อให้กดเลือกลีกได้ทันที
-                allMatches = [
-                    { id: 1, home_team: 'Real Madrid', away_team: 'Barcelona', home_score: 2, away_score: 1, status: 'IN_PLAY', league_name: 'La Liga' },
-                    { id: 2, home_team: 'Arsenal', away_team: 'Chelsea', home_score: 0, away_score: 0, status: 'TIMED', league_name: 'Premier League' }
-                ];
-                
-                renderLeagues();
-                renderMatches();
-            } catch (err) {
-                console.error(err);
-            }
-        }
-
-        function renderLeagues() {
-            const leagues = ['ALL', ...new Set(allMatches.map(m => m.league_name))];
-            const filterContainer = document.getElementById('league-filters');
-            filterContainer.innerHTML = leagues.map(league => `
-                <button onclick="filterLeague('${league}')" 
-                        class="${currentFilter === league ? 'bg-sky-500' : 'bg-slate-800 border border-slate-700'} px-3 py-1.5 rounded-full font-medium whitespace-nowrap">
-                    ${league === 'ALL' ? 'ทั้งหมด' : league}
-                </button>
-            `).join('');
-        }
-
-        function filterLeague(league) {
-            currentFilter = league;
-            renderLeagues();
-            renderMatches();
-        }
-
         function renderMatches() {
             const favTeam = localStorage.getItem('favTeam')?.toLowerCase();
             const container = document.getElementById('matches-container');
             const pinnedContainer = document.getElementById('pinned-container');
             const pinnedMatchesDiv = document.getElementById('pinned-matches');
 
-            let filtered = currentFilter === 'ALL' ? allMatches : allMatches.filter(m => m.league_name === currentFilter);
-            let pinned = [];
-
-            if (favTeam) {
-                pinned = allMatches.filter(m => m.home_team.toLowerCase().includes(favTeam) || m.away_team.toLowerCase().includes(favTeam));
-            }
+            let pinned = favTeam ? allMatches.filter(m => m.home_team.toLowerCase().includes(favTeam) || m.away_team.toLowerCase().includes(favTeam)) : [];
 
             if (pinned.length > 0) {
                 pinnedContainer.classList.remove('hidden');
@@ -117,11 +129,7 @@
                 pinnedContainer.classList.add('hidden');
             }
 
-            if (filtered.length === 0) {
-                container.innerHTML = `<div class="text-center py-8 text-slate-500 text-sm">ไม่มีรายการแข่งขันในหมวดนี้</div>`;
-            } else {
-                container.innerHTML = filtered.map(createMatchCard).join('');
-            }
+            container.innerHTML = allMatches.map(createMatchCard).join('');
         }
 
         function createMatchCard(m) {
@@ -130,17 +138,30 @@
                     <div class="text-xs text-slate-400 w-20">${m.league_name}</div>
                     <div class="flex-1 text-center font-semibold text-sm">
                         <span>${m.home_team}</span>
-                        <span class="bg-slate-900 px-2 py-1 rounded mx-2 text-sky-400">${m.home_score ?? 0} - ${m.away_score ?? 0}</span>
+                        <span class="bg-slate-900 px-2 py-1 rounded mx-2 text-sky-400">${m.home_score} - ${m.away_score}</span>
                         <span>${m.away_team}</span>
                     </div>
-                    <div class="text-xs font-bold ${m.status === 'IN_PLAY' ? 'text-emerald-400' : 'text-slate-400'} w-16 text-right">
+                    <div class="text-xs font-bold ${m.status === 'IN_PLAY' ? 'text-emerald-400' : 'text-slate-400'} w-12 text-right">
                         ${m.status === 'IN_PLAY' ? 'LIVE' : 'VS'}
                     </div>
                 </div>
             `;
         }
 
-        loadMatches();
+        function renderStandings() {
+            const body = document.getElementById('standings-body');
+            body.innerHTML = mockStandings.map(row => `
+                <tr class="hover:bg-slate-700/30">
+                    <td class="p-2.5 text-center font-bold ${row.pos <= 4 ? 'text-sky-400' : 'text-slate-400'}">${row.pos}</td>
+                    <td class="p-2.5 font-semibold">${row.team}</td>
+                    <td class="p-2.5 text-center text-slate-400">${row.p}</td>
+                    <td class="p-2.5 text-center text-slate-400">${row.gd}</td>
+                    <td class="p-2.5 text-center font-bold text-sky-400">${row.pts}</td>
+                </tr>
+            `).join('');
+        }
+
+        renderMatches();
     </script>
 </body>
 </html>
