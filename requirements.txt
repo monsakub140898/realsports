@@ -1,0 +1,3 @@
+requests
+libsql-experimental
+python-dotenv
