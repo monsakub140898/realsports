@@ -126,20 +126,27 @@
         }
 
         async function fetchRealMatches() {
-            const targetDate = getTargetDateStr(selectedDateMode);
-            try {
-                const res = await db.execute({
-                    sql: "SELECT * FROM matches WHERE match_date = ? ORDER BY id DESC",
-                    args: [targetDate]
-                });
-                allMatches = res.rows;
-                renderMatches();
-            } catch (err) {
-                console.error("Fetch matches error:", err);
-                document.getElementById('matches-container').innerHTML = 
-                    `<div class="text-center py-12 text-slate-500 text-sm">ไม่พบข้อมูลในระบบ</div>`;
-            }
+    const targetDate = getTargetDateStr(selectedDateMode);
+    try {
+        // ดึงตามวันที่เลือกก่อน
+        let res = await db.execute({
+            sql: "SELECT * FROM matches WHERE match_date = ? ORDER BY id DESC",
+            args: [targetDate]
+        });
+        
+        // ถ้าวันที่เลือกไม่มีข้อมูล ให้ดึงแมตช์ทั้งหมดที่มีในระบบมาโชว์แทนเพื่อความชัวร์
+        if (res.rows.length === 0) {
+            res = await db.execute("SELECT * FROM matches ORDER BY id DESC LIMIT 50");
         }
+
+        allMatches = res.rows;
+        renderMatches();
+    } catch (err) {
+        console.error("Fetch matches error:", err);
+        document.getElementById('matches-container').innerHTML = 
+            `<div class="text-center py-12 text-slate-500 text-sm">ไม่พบข้อมูลในระบบ (กรุณารัน GitHub Action)</div>`;
+    }
+}
 
         function changeDate(mode) {
             selectedDateMode = mode;
