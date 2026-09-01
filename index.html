@@ -3,101 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>REALSPORTS - Custom Live Scores</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-        body { background-color: #0f172a; color: #f8fafc; padding: 20px; }
-        .container { max-width: 650px; margin: 0 auto; }
-        
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        header h1 { color: #38bdf8; font-size: 1.8rem; }
-        .settings-btn { background: #334155; color: #fff; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
-
-        /* Pinned Team Section */
-        .pin-card { background: linear-gradient(135deg, #1e1b4b, #312e81); border: 2px solid #6366f1; border-radius: 12px; padding: 15px; margin-bottom: 20px; }
-        .pin-header { display: flex; justify-content: space-between; align-items: center; color: #fbbf24; font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; }
-
-        /* Controls & Filter Modal */
-        .filter-panel { background: #1e293b; padding: 15px; border-radius: 10px; margin-bottom: 20px; display: none; }
-        .filter-panel.active { display: block; }
-        .filter-group { margin-bottom: 10px; }
-        .filter-group label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px; }
-        .filter-group input, .filter-group select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; }
-
-        /* League Tabs */
-        .tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 15px; }
-        .tab-btn { background: #1e293b; color: #94a3b8; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; white-space: nowrap; font-size: 0.85rem; }
-        .tab-btn.active { background: #0284c7; color: white; font-weight: bold; }
-
-        /* Match Card */
-        .match-card { background: #1e293b; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
-        .team { display: flex; align-items: center; gap: 10px; flex: 1; }
-        .team.away { justify-content: flex-end; }
-        .team img { width: 24px; height: 24px; object-fit: contain; }
-        .score-box { background: #0f172a; padding: 6px 14px; border-radius: 6px; text-align: center; min-width: 70px; }
-        .score { font-size: 1.1rem; font-weight: bold; color: #38bdf8; }
-        .status { font-size: 0.7rem; color: #94a3b8; }
-        .status.live { color: #ef4444; font-weight: bold; }
-    </style>
+    <title>REALSPORTS - Custom Live Score</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@libsql/client@0.3.5/lib/bundle.js"></script>
 </head>
-<body>
+<body class="bg-slate-900 text-white min-h-screen p-4 font-sans">
+    <div class="max-w-md mx-auto space-y-4">
+        <!-- Header -->
+        <div class="flex justify-between items-center py-2">
+            <h1 class="text-2xl font-bold tracking-wider text-sky-400">REALSPORTS</h1>
+            <button onclick="toggleSettings()" class="bg-slate-800 text-xs px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-700">
+                ⚙️ เลือกทีมโปรด
+            </button>
+        </div>
 
-<div class="container">
-    <header>
-        <h1>REALSPORTS</h1>
-        <button class="settings-btn" onclick="toggleSettings()">⚙️ เลือกทีม/ลีกโปรด</button>
-    </header>
+        <!-- Pinned Settings Panel -->
+        <div id="settings-panel" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2">
+            <label class="block text-xs text-slate-400">พิมพ์ชื่อทีมโปรดที่ต้องการปักหมุดบนสุด:</label>
+            <input type="text" id="fav-input" placeholder="เช่น Real Madrid, Arsenal..." 
+                   class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+            <button onclick="saveFavTeam()" class="w-full bg-sky-600 text-white text-sm py-1.5 rounded-lg font-medium hover:bg-sky-500">บันทึก</button>
+        </div>
 
-    <!-- เมนูตั้งค่า เลือกทีมโปรดเอง -->
-    <div id="settings-panel" class="filter-panel">
-        <div class="filter-group">
-            <label>พิมพ์ชื่อทีมโปรดที่ต้องการปักหมุดบนสุด:</label>
-            <input type="text" id="favorite-team-input" placeholder="เช่น Real Madrid, Arsenal, Barcelona..." onchange="saveFavoriteTeam(this.value)">
+        <!-- Pinned Section -->
+        <div id="pinned-container" class="bg-indigo-950/60 border border-indigo-500/30 p-3 rounded-xl hidden">
+            <div class="text-xs font-bold text-amber-400 mb-2">📌 ทีมโปรดของคุณ</div>
+            <div id="pinned-matches" class="space-y-2"></div>
+        </div>
+
+        <!-- League Filter Tabs -->
+        <div id="league-filters" class="flex gap-2 overflow-x-auto pb-1 text-xs">
+            <button onclick="filterLeague('ALL')" class="bg-sky-500 px-3 py-1.5 rounded-full font-semibold">ทั้งหมด</button>
+        </div>
+
+        <!-- Matches List -->
+        <div id="matches-container" class="space-y-2">
+            <div class="text-center py-8 text-slate-500 text-sm">กำลังโหลดข้อมูลแมตช์...</div>
         </div>
     </div>
 
-    <!-- ส่วนปักหมุดทีมโปรด -->
-    <div class="pin-card">
-        <div class="pin-header">
-            <span>📌 ทีมโปรดของคุณ: <span id="fav-team-name" style="color:#fff;">ยังไม่ได้เลือก</span></span>
-        </div>
-        <div id="pinned-match-container">
-            <div style="text-align: center; color: #94a3b8; font-size: 0.85rem;">ไม่มีการแข่งขันวันนี้</div>
-        </div>
-    </div>
+    <script>
+        // ใส่ URL และ Token ของ Turso คุณพลลงตรงนี้เพื่อเปิดดูผ่านหน้าเว็บ
+        const TURSO_URL = "libsql://realsports-db-pponnsp.aws-ap-northeast-1.turso.io";
+        const TURSO_TOKEN = "YOUR_TURSO_AUTH_TOKEN"; // นำ Token จาก .env มาวาง
 
-    <!-- รายการแข่งขัน -->
-    <div class="tabs" id="league-tabs">
-        <button class="tab-btn active" onclick="filterLeague('ALL')">ทั้งหมด</button>
-    </div>
+        let allMatches = [];
+        let currentFilter = 'ALL';
 
-    <div id="match-list"></div>
-</div>
+        function toggleSettings() {
+            document.getElementById('settings-panel').classList.toggle('hidden');
+        }
 
-<script>
-    let favoriteTeam = localStorage.getItem('favTeam') || 'Real Madrid';
-    
-    document.getElementById('favorite-team-input').value = favoriteTeam;
-    document.getElementById('fav-team-name').innerText = favoriteTeam;
+        function saveFavTeam() {
+            const team = document.getElementById('fav-input').value.trim();
+            localStorage.setItem('favTeam', team);
+            toggleSettings();
+            renderMatches();
+        }
 
-    function toggleSettings() {
-        const panel = document.getElementById('settings-panel');
-        panel.classList.toggle('active');
-    }
+        async function loadMatches() {
+            try {
+                // หากยังไม่ได้ใส่ Token จะใช้ข้อมูลสำรองแสดงผลปุ่มเลือกก่อน
+                const favTeam = localStorage.getItem('favTeam') || 'Real Madrid';
+                document.getElementById('fav-input').value = favTeam;
 
-    function saveFavoriteTeam(teamName) {
-        favoriteTeam = teamName;
-        localStorage.setItem('favTeam', teamName);
-        document.getElementById('fav-team-name').innerText = teamName;
-        // โหลดข้อมูลใหม่ตามทีมโปรด
-    }
+                // Mockup Data ตัวอย่างเพื่อให้กดเลือกลีกได้ทันที
+                allMatches = [
+                    { id: 1, home_team: 'Real Madrid', away_team: 'Barcelona', home_score: 2, away_score: 1, status: 'IN_PLAY', league_name: 'La Liga' },
+                    { id: 2, home_team: 'Arsenal', away_team: 'Chelsea', home_score: 0, away_score: 0, status: 'TIMED', league_name: 'Premier League' }
+                ];
+                
+                renderLeagues();
+                renderMatches();
+            } catch (err) {
+                console.error(err);
+            }
+        }
 
-    function filterLeague(leagueName) {
-        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        event.target.classList.add('active');
-        // กรองข้อมูลลีกตามที่เลือก
-    }
-</script>
+        function renderLeagues() {
+            const leagues = ['ALL', ...new Set(allMatches.map(m => m.league_name))];
+            const filterContainer = document.getElementById('league-filters');
+            filterContainer.innerHTML = leagues.map(league => `
+                <button onclick="filterLeague('${league}')" 
+                        class="${currentFilter === league ? 'bg-sky-500' : 'bg-slate-800 border border-slate-700'} px-3 py-1.5 rounded-full font-medium whitespace-nowrap">
+                    ${league === 'ALL' ? 'ทั้งหมด' : league}
+                </button>
+            `).join('');
+        }
 
+        function filterLeague(league) {
+            currentFilter = league;
+            renderLeagues();
+            renderMatches();
+        }
+
+        function renderMatches() {
+            const favTeam = localStorage.getItem('favTeam')?.toLowerCase();
+            const container = document.getElementById('matches-container');
+            const pinnedContainer = document.getElementById('pinned-container');
+            const pinnedMatchesDiv = document.getElementById('pinned-matches');
+
+            let filtered = currentFilter === 'ALL' ? allMatches : allMatches.filter(m => m.league_name === currentFilter);
+            let pinned = [];
+
+            if (favTeam) {
+                pinned = allMatches.filter(m => m.home_team.toLowerCase().includes(favTeam) || m.away_team.toLowerCase().includes(favTeam));
+            }
+
+            if (pinned.length > 0) {
+                pinnedContainer.classList.remove('hidden');
+                pinnedMatchesDiv.innerHTML = pinned.map(createMatchCard).join('');
+            } else {
+                pinnedContainer.classList.add('hidden');
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-slate-500 text-sm">ไม่มีรายการแข่งขันในหมวดนี้</div>`;
+            } else {
+                container.innerHTML = filtered.map(createMatchCard).join('');
+            }
+        }
+
+        function createMatchCard(m) {
+            return `
+                <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex items-center justify-between">
+                    <div class="text-xs text-slate-400 w-20">${m.league_name}</div>
+                    <div class="flex-1 text-center font-semibold text-sm">
+                        <span>${m.home_team}</span>
+                        <span class="bg-slate-900 px-2 py-1 rounded mx-2 text-sky-400">${m.home_score ?? 0} - ${m.away_score ?? 0}</span>
+                        <span>${m.away_team}</span>
+                    </div>
+                    <div class="text-xs font-bold ${m.status === 'IN_PLAY' ? 'text-emerald-400' : 'text-slate-400'} w-16 text-right">
+                        ${m.status === 'IN_PLAY' ? 'LIVE' : 'VS'}
+                    </div>
+                </div>
+            `;
+        }
+
+        loadMatches();
+    </script>
 </body>
 </html>
