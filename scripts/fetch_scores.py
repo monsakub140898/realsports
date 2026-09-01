@@ -49,7 +49,7 @@ def fetch_and_save_data():
 
     headers = {"X-Auth-Token": FOOTBALL_API_KEY}
 
-    # 1. ดึงข้อมูลแมตช์การแข่งขัน
+    # 1. ดึงข้อมูลแมตช์การแข่งขันทั้งหมด
     matches_url = "https://api.football-data.org/v4/matches"
     resp = requests.get(matches_url, headers=headers)
     if resp.status_code == 200:
@@ -74,8 +74,15 @@ def fetch_and_save_data():
             ))
         print(f"Updated {len(matches)} matches.")
 
-    # 2. ดึงตารางคะแนนลีกหลัก (Premier League = PL, La Liga = PD)
-    leagues = [('PL', 'Premier League'), ('PD', 'La Liga')]
+    # 2. ดึงตารางคะแนน 5 ลีกใหญ่
+    leagues = [
+        ('PL', 'Premier League'),
+        ('PD', 'La Liga'),
+        ('BL1', 'Bundesliga'),
+        ('SA', 'Serie A'),
+        ('FL1', 'Ligue 1')
+    ]
+    
     cursor.execute("DELETE FROM standings") # เคลียร์ข้อมูลเก่าก่อนอัปเดตใหม่
 
     for code, name in leagues:
