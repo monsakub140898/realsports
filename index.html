@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>REALSPORTS - Live Scores & Standings</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 1. ดึง LibSQL Client SDK สำหรับ Web Browser -->
     <script type="module">
         import { createClient } from "https://esm.sh/@libsql/client@0.6.0/web";
         window.createLibsqlClient = createClient;
@@ -29,24 +28,29 @@
             <button onclick="saveFavTeam()" class="w-full bg-sky-600 text-white text-sm py-1.5 rounded-lg font-medium hover:bg-sky-500">บันทึก</button>
         </div>
 
-        <!-- MAIN TAB 1: MATCHES VIEW -->
+        <!-- TAB 1: MATCHES VIEW -->
         <div id="view-matches" class="space-y-4">
+            <!-- Pinned Matches -->
             <div id="pinned-container" class="bg-indigo-950/60 border border-indigo-500/30 p-3 rounded-xl hidden">
                 <div class="text-xs font-bold text-amber-400 mb-2">📌 ทีมโปรดของคุณ</div>
                 <div id="pinned-matches" class="space-y-2"></div>
             </div>
+
+            <!-- League Filter Tabs -->
             <div id="league-filters" class="flex gap-2 overflow-x-auto pb-1 text-xs"></div>
+
+            <!-- Matches List -->
             <div id="matches-container" class="space-y-2">
-                <div class="text-center py-8 text-slate-500 text-sm">กำลังดึงข้อมูลแมตช์จริงจากฐานข้อมูล...</div>
+                <div class="text-center py-8 text-slate-500 text-sm">กำลังเชื่อมต่อฐานข้อมูล...</div>
             </div>
         </div>
 
-        <!-- MAIN TAB 2: STANDINGS VIEW -->
+        <!-- TAB 2: STANDINGS VIEW -->
         <div id="view-standings" class="hidden space-y-4">
-            <div class="flex gap-2 overflow-x-auto pb-1 text-xs">
-                <button id="btn-PL" onclick="loadStandings('PL')" class="bg-sky-500 px-3 py-1.5 rounded-full font-medium">Premier League</button>
-                <button id="btn-PD" onclick="loadStandings('PD')" class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full font-medium">La Liga</button>
-            </div>
+            <!-- Standings League Selector -->
+            <div id="standings-tabs" class="flex gap-2 overflow-x-auto pb-1 text-xs"></div>
+
+            <!-- Standings Table -->
             <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
                 <table class="w-full text-left text-xs">
                     <thead class="bg-slate-950 text-slate-400">
@@ -59,7 +63,7 @@
                         </tr>
                     </thead>
                     <tbody id="standings-body" class="divide-y divide-slate-700/50">
-                        <tr><td colspan="5" class="text-center py-6 text-slate-500">กำลังโหลดตารางคะแนน...</td></tr>
+                        <tr><td colspan="5" class="text-center py-6 text-slate-500">กำลังโหลด...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -77,28 +81,27 @@
     </div>
 
     <script>
-        // 2. ใส่ค่า Turso URL และ Read Token ของคุณพลตรงนี้
-        const TURSO_URL = "https://realsports-db-pponnsp.aws-ap-northeast-1.turso.io"; // เปลี่ยนเป็น https://
-        const TURSO_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicm8iLCJpYXQiOjE3ODgyNTcxMjMsImlkIjoiMDFhMDVjNDctMTMwMS03MjJkLWFlMDEtNTYxNzBkNTUyNTliIiwia2lkIjoiOEhLTll6MVNJeWJPc2p4UzdmQXpoN2VBTWVjY2xDeE5VRTgwbWRVZTJYbyIsInJpZCI6ImVlNDVlMWE4LTE1OWUtNGY3Zi05YTNmLTUzNjNhMDA4NTY0MiJ9.UNkIyqdP_jD6NIpnMoyE_XhMn0y-HQCjge7hPzbuXcQRloiH-fDioFE2Iz_Do_Iiti4Pq_kFO0a4d3kYCnTgBA"; 
+        const TURSO_URL = "https://realsports-db-pponnsp.aws-ap-northeast-1.turso.io";
+        const TURSO_TOKEN = "ใส่_READ_ONLY_TOKEN_ของคุณพล"; 
 
         let db = null;
         let allMatches = [];
-        let standingsData = {};
+        let selectedLeague = 'ALL';
+        let currentStandingsLeague = 'PL';
 
-        // เริ่มต้นสร้าง Connection เชื่อมต่อ Turso
         async function initDB() {
             if (window.createLibsqlClient) {
                 db = window.createLibsqlClient({
                     url: TURSO_URL,
                     authToken: TURSO_TOKEN
                 });
+                renderLeagueFilters();
                 await fetchRealMatches();
             } else {
-                setTimeout(initDB, 200); // รอ SDK โหลดเสร็จ
+                setTimeout(initDB, 200);
             }
         }
 
-        // ดึงข้อมูลแมตช์จริงจากตาราง matches
         async function fetchRealMatches() {
             try {
                 const res = await db.execute("SELECT * FROM matches ORDER BY id DESC");
@@ -111,9 +114,98 @@
             }
         }
 
-        // ดึงข้อมูลตารางคะแนนจริงจากตาราง standings
+        function renderLeagueFilters() {
+            const leagues = [
+                { code: 'ALL', name: 'ทั้งหมด' },
+                { code: 'Premier League', name: 'พรีเมียร์ลีก' },
+                { code: 'La Liga', name: 'ลาลีกา' },
+                { code: 'Bundesliga', name: 'บุนเดสลีกา' },
+                { code: 'Serie A', name: 'กัลโช่' },
+                { code: 'Ligue 1', name: 'ลีกเอิง' }
+            ];
+
+            const container = document.getElementById('league-filters');
+            container.innerHTML = leagues.map(l => `
+                <button onclick="filterByLeague('${l.code}')" 
+                        class="px-3 py-1.5 rounded-full whitespace-nowrap transition-all ${selectedLeague === l.code ? 'bg-sky-500 text-white font-bold' : 'bg-slate-800 text-slate-400 border border-slate-700'}">
+                    ${l.name}
+                </button>
+            `).join('');
+        }
+
+        function filterByLeague(code) {
+            selectedLeague = code;
+            renderLeagueFilters();
+            renderMatches();
+        }
+
+        function renderMatches() {
+            const favTeam = localStorage.getItem('favTeam')?.toLowerCase();
+            const container = document.getElementById('matches-container');
+            const pinnedContainer = document.getElementById('pinned-container');
+            const pinnedMatchesDiv = document.getElementById('pinned-matches');
+
+            let pinned = (favTeam && allMatches.length > 0) 
+                ? allMatches.filter(m => m.home_team.toLowerCase().includes(favTeam) || m.away_team.toLowerCase().includes(favTeam)) 
+                : [];
+
+            if (pinned.length > 0) {
+                pinnedContainer.classList.remove('hidden');
+                pinnedMatchesDiv.innerHTML = pinned.map(createMatchCard).join('');
+            } else {
+                pinnedContainer.classList.add('hidden');
+            }
+
+            let filteredMatches = allMatches;
+            if (selectedLeague !== 'ALL') {
+                filteredMatches = allMatches.filter(m => m.league_name === selectedLeague);
+            }
+
+            if (filteredMatches.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-slate-500 text-sm">ไม่มีรายการแข่งขันในลีกนี้</div>`;
+            } else {
+                container.innerHTML = filteredMatches.map(createMatchCard).join('');
+            }
+        }
+
+        function createMatchCard(m) {
+            return `
+                <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex items-center justify-between">
+                    <div class="text-xs text-slate-400 w-20 truncate">${m.league_name}</div>
+                    <div class="flex-1 text-center font-semibold text-sm">
+                        <span>${m.home_team}</span>
+                        <span class="bg-slate-900 px-2 py-1 rounded mx-2 text-sky-400">${m.home_score ?? 0} - ${m.away_score ?? 0}</span>
+                        <span>${m.away_team}</span>
+                    </div>
+                    <div class="text-xs font-bold ${m.status === 'IN_PLAY' ? 'text-emerald-400' : 'text-slate-400'} w-12 text-right">
+                        ${m.status === 'IN_PLAY' ? 'LIVE' : 'VS'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStandingsTabs() {
+            const leagues = [
+                { code: 'PL', name: 'พรีเมียร์ลีก' },
+                { code: 'PD', name: 'ลาลีกา' },
+                { code: 'BL1', name: 'บุนเดสลีกา' },
+                { code: 'SA', name: 'กัลโช่' },
+                { code: 'FL1', name: 'ลีกเอิง' }
+            ];
+
+            const container = document.getElementById('standings-tabs');
+            container.innerHTML = leagues.map(l => `
+                <button onclick="loadStandings('${l.code}')" 
+                        class="px-3 py-1.5 rounded-full whitespace-nowrap transition-all ${currentStandingsLeague === l.code ? 'bg-sky-500 text-white font-bold' : 'bg-slate-800 text-slate-400 border border-slate-700'}">
+                    ${l.name}
+                </button>
+            `).join('');
+        }
+
         async function loadStandings(leagueCode) {
-            updateLeagueButtons(leagueCode);
+            currentStandingsLeague = leagueCode;
+            renderStandingsTabs();
+
             const body = document.getElementById('standings-body');
             body.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500">กำลังโหลด...</td></tr>`;
 
@@ -142,18 +234,6 @@
             }
         }
 
-        function updateLeagueButtons(selectedCode) {
-            const btnPL = document.getElementById('btn-PL');
-            const btnPD = document.getElementById('btn-PD');
-            if (selectedCode === 'PL') {
-                btnPL.className = 'bg-sky-500 px-3 py-1.5 rounded-full font-medium';
-                btnPD.className = 'bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full font-medium';
-            } else {
-                btnPD.className = 'bg-sky-500 px-3 py-1.5 rounded-full font-medium';
-                btnPL.className = 'bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full font-medium';
-            }
-        }
-
         function switchTab(tab) {
             if (tab === 'matches') {
                 document.getElementById('view-matches').classList.remove('hidden');
@@ -165,7 +245,7 @@
                 document.getElementById('view-standings').classList.remove('hidden');
                 document.getElementById('nav-matches').className = 'flex flex-col items-center text-slate-400 text-xs font-semibold';
                 document.getElementById('nav-standings').className = 'flex flex-col items-center text-sky-400 text-xs font-semibold';
-                loadStandings('PL');
+                loadStandings(currentStandingsLeague);
             }
         }
 
@@ -178,46 +258,6 @@
             localStorage.setItem('favTeam', team);
             toggleSettings();
             renderMatches();
-        }
-
-        function renderMatches() {
-            const favTeam = localStorage.getItem('favTeam')?.toLowerCase();
-            const container = document.getElementById('matches-container');
-            const pinnedContainer = document.getElementById('pinned-container');
-            const pinnedMatchesDiv = document.getElementById('pinned-matches');
-
-            let pinned = (favTeam && allMatches.length > 0) 
-                ? allMatches.filter(m => m.home_team.toLowerCase().includes(favTeam) || m.away_team.toLowerCase().includes(favTeam)) 
-                : [];
-
-            if (pinned.length > 0) {
-                pinnedContainer.classList.remove('hidden');
-                pinnedMatchesDiv.innerHTML = pinned.map(createMatchCard).join('');
-            } else {
-                pinnedContainer.classList.add('hidden');
-            }
-
-            if (allMatches.length === 0) {
-                container.innerHTML = `<div class="text-center py-8 text-slate-500 text-sm">ไม่มีรายการแข่งขันวันนี้</div>`;
-            } else {
-                container.innerHTML = allMatches.map(createMatchCard).join('');
-            }
-        }
-
-        function createMatchCard(m) {
-            return `
-                <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex items-center justify-between">
-                    <div class="text-xs text-slate-400 w-20 truncate">${m.league_name}</div>
-                    <div class="flex-1 text-center font-semibold text-sm">
-                        <span>${m.home_team}</span>
-                        <span class="bg-slate-900 px-2 py-1 rounded mx-2 text-sky-400">${m.home_score ?? 0} - ${m.away_score ?? 0}</span>
-                        <span>${m.away_team}</span>
-                    </div>
-                    <div class="text-xs font-bold ${m.status === 'IN_PLAY' ? 'text-emerald-400' : 'text-slate-400'} w-12 text-right">
-                        ${m.status === 'IN_PLAY' ? 'LIVE' : 'VS'}
-                    </div>
-                </div>
-            `;
         }
 
         initDB();
